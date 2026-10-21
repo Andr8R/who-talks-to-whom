@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Who Talks to Whom?</title>
+<meta name="description" content="Interactive demo: particle graphs, message passing and attention in jet physics (precomputed outputs of trained models).">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="eyebrow">Interactive demo · Advanced ML for particle physics</div>
+    <h1>Who talks to whom?</h1>
+    <p class="sub">Particles in a jet as a graph: message passing, attention, and local vs global connectivity.</p>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="graph">1 · Graph &amp; message passing</button>
+      <button role="tab" data-tab="attention">2 · Attention</button>
+      <button role="tab" data-tab="compare">3 · Local vs global</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="toolbar">
+    <label>Jet
+      <select id="jet"></select>
+    </label>
+    <span id="jetinfo" class="muted"></span>
+  </section>
+
+  <!-- ===================================================== TAB 1 -->
+  <section class="tab" id="tab-graph">
+    <div class="grid">
+      <div class="panel figure">
+        <svg id="svg-graph" viewBox="0 0 600 600" aria-label="Jet as a k-nearest-neighbour graph"></svg>
+        <p class="hint">Tap a particle to make it the receiving node <i>i</i>. <button class="zoom"></button></p>
+      </div>
+      <div class="panel side">
+        <div class="ctl">
+          <div class="ctl-label">Neighbours per particle, <i>k</i></div>
+          <div class="seg" id="seg-k"></div>
+        </div>
+        <div class="ctl">
+          <div class="ctl-label">Message-passing layers, <i>L</i> = <b id="L-val">0</b></div>
+          <input type="range" id="L" min="0" max="4" value="1">
+        </div>
+        <div class="readout" id="graph-readout"></div>
+        <div class="explain">
+          <p><b>One layer:</b> every particle collects messages from its <i>k</i> nearest neighbours in (η, φ), then updates itself:</p>
+          <p class="eq">h<sub>i</sub>′ = mean<sub>j ∈ kNN(i)</sub> MLP(h<sub>i</sub>, h<sub>j</sub> − h<sub>i</sub>)</p>
+          <p>Information flows from each particle's <i>k</i> nearest neighbours into it. After <i>L</i> layers, particle <i>i</i> has received information from its <b>L-hop neighbourhood</b> (coloured; darker = fewer hops). With small <i>k</i> the receptive field <b>stops growing</b>: collinear fragments only talk to each other, and the other prong never arrives, however many layers you add.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================== TAB 2 -->
+  <section class="tab" id="tab-attention">
+    <div class="grid">
+      <div class="panel figure">
+        <svg id="svg-attn" viewBox="0 0 600 600" aria-label="Attention weights from the selected particle"></svg>
+        <p class="hint">Tap a particle (or a heatmap row) to choose the query. Line width ∝ weight relative to uniform 1/N. <button class="zoom"></button></p>
+      </div>
+      <div class="panel side">
+        <div class="ctl">
+          <div class="ctl-label">Model</div>
+          <div class="seg" id="seg-model"></div>
+        </div>
+        <div class="ctl two">
+          <div><div class="ctl-label">Layer</div><div class="seg" id="seg-layer"></div></div>
+          <div><div class="ctl-label">Head</div><div class="seg" id="seg-head"></div></div>
+        </div>
+        <div class="readout" id="attn-readout"></div>
+        <div class="heat">
+          <canvas id="heat" width="300" height="300" aria-label="Attention matrix"></canvas>
+          <div class="muted small">Attention matrix α<sub>ij</sub>: rows = queries <i>i</i>, columns = keys <i>j</i>, both ordered by p<sub>T</sub>. Grey = not allowed by the mask.</div>
+        </div>
+        <div class="warn"><b>Careful:</b> attention shows where information is <i>mixed from</i> in one layer, not <i>why</i> the network decided. In the lecture's removal test, removing the most-attended particle hurt the model <i>less</i> than removing simply the hardest one.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================== TAB 3 -->
+  <section class="tab" id="tab-compare">
+    <div class="ctl inline">
+      <div><span class="ctl-label">Layer</span> <span class="seg" id="seg-layer3"></span></div>
+      <span class="muted small">Heads averaged. Tap a particle in any panel to change the receiving particle.</span> <button class="zoom"></button>
+    </div>
+    <div class="triple">
+      <div class="panel"><h3>Message passing (EdgeConv)</h3><p class="small muted">k = 8 neighbours, <b>fixed</b> equal weights 1/k</p><svg id="svg-c1" viewBox="0 0 600 600"></svg></div>
+      <div class="panel"><h3>k-NN attention</h3><p class="small muted">same 8 neighbours, <b>learned</b> weights</p><svg id="svg-c2" viewBox="0 0 600 600"></svg></div>
+      <div class="panel"><h3>Transformer</h3><p class="small muted"><b>all</b> particles, learned weights</p><svg id="svg-c3" viewBox="0 0 600 600"></svg></div>
+    </div>
+    <div class="grid2">
+      <div class="panel"><h3>This jet: P(W) from each trained model</h3><div id="bars"></div></div>
+      <div class="panel"><h3>All 30k test jets (lecture results)</h3><div id="summary"></div>
+        <p class="small muted">Background rejection 1/ε<sub>B</sub> at 50 % W efficiency. Same training data and budget for all models. Local learned weights ≈ local fixed weights; going global gives the big step.</p></div>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap">
+  <p><b>Synthetic data.</b> Toy simulation of boosted W → qq̄ and QCD jets with identical jet-mass distributions. All model outputs (scores, attention weights) were precomputed offline with the trained lecture models; this page only draws them. The k-NN graphs are pure geometry, computed when you change <i>k</i>.</p>
+</footer>
+
+<script src="data/jets.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
